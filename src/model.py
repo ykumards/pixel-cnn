@@ -114,7 +114,7 @@ class PixelCNN(nn.Module):
                  n_features: int,
                  n_layers: int,
                  n_bins: int,
-                 dropout: float = 0.5):
+                 dropout:float = 0.5):
         super().__init__()
         
         self.layers = nn.ModuleList()

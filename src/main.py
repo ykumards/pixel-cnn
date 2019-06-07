@@ -6,10 +6,7 @@ import torch
 import trainer, utils, model
 from args import args
 
-def run(resume=False):
-    def input2label(x):
-        return torch.squeeze(torch.round((args.n_bins - 1) * x).type(torch.LongTensor), 1)
-    
+def run(resume=False):    
     exp_name = args.exp_name
     exp_name += '_%s_%ifeat_%ilayers_%ibins'%(
         args.dataset_name, args.n_features, args.n_layers, args.n_bins)
@@ -19,7 +16,7 @@ def run(resume=False):
         os.makedirs(exp_dir)
 
     # Data loaders
-    train_loader, val_loader, onehot_fcn, n_classes = utils.data_loader(
+    train_loader, val_loader, onehot_fn, n_classes = utils.data_loader(
         args.dataset_name, args.batch_size
     )
 
@@ -51,19 +48,23 @@ def run(resume=False):
                 and os.path.isfile(exp_dir/'last_checkpoint.pth')):
             raise Exception('Missing param, stats or checkpoint file on resume')
         net = torch.load(exp_dir/'last_checkpoint.pth')
-
+    print("-" * 100)
+    print("model loaded")
     print(net)
-    # Define loss fcn, incl. label formatting from input    
-    loss_fcn = torch.nn.NLLLoss()
+    print()
+    print("-" * 100)
+    
+    # Define loss fcn
+    loss_fn = torch.nn.NLLLoss()
 
     # Train
     trainer.fit(train_loader=train_loader,
                 val_loader=val_loader,
                 model=net,
                 exp_path=exp_dir,
-                label_preprocess=input2label,
-                loss_fcn=loss_fcn,
-                onehot_fcn=onehot_fcn,
+                label_preprocess=utils.input2label,
+                loss_fn=loss_fn,
+                onehot_fn=onehot_fn,
                 n_classes=10,
                 optimizer=args.optimizer,
                 learning_rate=args.learning_rate,

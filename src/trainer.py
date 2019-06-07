@@ -1,6 +1,7 @@
 import os
 import json
 import time
+from typing import Callable
 from pathlib import Path
 from skimage.transform import resize
 from progressbar import ProgressBar
@@ -20,7 +21,6 @@ def generate(trained_model, img_size, y, temp=0.8, cuda=False):
     trained_model.eval()
     gen = torch.from_numpy(np.zeros([y.shape[0], 1] + img_size, dtype='float32'))
     y = torch.from_numpy(y)
-    
     if cuda:
         y, gen = y.cuda(), gen.cuda()   
              
@@ -34,25 +34,27 @@ def generate(trained_model, img_size, y, temp=0.8, cuda=False):
             p = p/torch.sum(p, -1, keepdim=True)
             sample = p.multinomial(1)
             gen[:, :, r, c] = sample.float()/(out.shape[1] - 1)
+            
     utils.clearline()
     utils.clearline()
     return (255*gen.data.cpu().numpy()).astype('uint8')
 
-def generate_images(trained_model, 
-                    img_size, 
-                    n_classes, 
-                    onehot_fcn, 
-                    cuda=False):
+def generate_images(trained_model: torch.nn.Module, 
+                    img_size: list, 
+                    n_classes: int, 
+                    onehot_fn: Callable, 
+                    cuda: bool=False):
+    "generate images from the trained model. Hard coded to 5 samples per class"
     y = np.array(list(range(min(n_classes, 10))) * 5) # generate 5 images per class
-    y = np.concatenate([onehot_fcn(x)[np.newaxis, :] for x in y])
+    y = np.concatenate([onehot_fn(x)[np.newaxis, :] for x in y])
     return generate(trained_model, img_size, y, cuda=cuda)
 
-def generate_between_classes(model, 
-                             img_size, 
-                             classes, 
-                             saveto,
-                             n_classes, 
-                             cuda=False):
+def generate_between_classes(model: torch.nn.Module, 
+                             img_size: list, 
+                             classes: int, 
+                             saveto: str,
+                             n_classes: int, 
+                             cuda:bool =False):
     y = np.zeros((1, n_classes), dtype='float32')
     y[:, classes] = 1/len(classes)
     y = np.repeat(y, 10, axis=0)
@@ -77,44 +79,49 @@ def plot_loss(train_loss: list, val_loss: list):
     plt.close(fig)
     return plot
 
-def fit(train_loader,
-        val_loader,
-        model,
-        exp_path,
-        label_preprocess,
-        loss_fcn,
-        onehot_fcn,
-        n_classes=10,
-        optimizer='adam',
-        learning_rate=1e-4,
-        cuda=True,
-        patience=10,
-        max_epochs=200,
-        resume=False):
-    def _save_img(x, filename):
+def fit(train_loader: torch.utils.data.DataLoader,
+        val_loader: torch.utils.data.DataLoader,
+        model: torch.nn.Module,
+        exp_path: str,
+        label_preprocess: Callable,
+        loss_fn: torch.autograd.Function,
+        onehot_fn: Callable,
+        n_classes:int =10,
+        optimizer:str ='adam',
+        learning_rate:float =1e-4,
+        cuda:bool =True,
+        patience:int =10,
+        max_epochs:int =200,
+        resume:bool =False):
+    def _save_img(x: np.array, filename: str):
+        "save numpy array representaion of image to image file"
         Image.fromarray((255*x).astype('uint8')).save(filename)
     
-    def _run_epoch(dataloader, training):
+    def _run_epoch(dataloader: torch.utils.data.DataLoader, 
+                   training: bool):
         p_bar = ProgressBar()
         losses = []
         mean_outs = []
-        for x, y in p_bar(dataloader):
-            label = label_preprocess(x)
+        # import pdb; pdb.set_trace()
+        # batch_images = [bs, ch, w, h], batch_targets = [bs, n_classes] OHE
+        for batch_images, batch_targets in p_bar(dataloader):
+            batch_labels = label_preprocess(batch_images)
             if cuda:
-                x, y = x.cuda(), y.cuda()
-                label = label.cuda()
+                batch_images, batch_targets = batch_images.cuda(), batch_targets.cuda()
+                batch_labels = batch_labels.cuda()
 
             if training:
                 optimizer.zero_grad()
                 model.train()
             else:
                 model.eval()
-            output = model(x, y)
-            loss = loss_fcn(output, label)
+            predicted_labels = model(batch_images, batch_targets)
+            # cross entropy between image's pixel value vs predicted
+            loss = loss_fn(predicted_labels, batch_labels)
             # track mean output
-            output = output.data.cpu().numpy()
+            predicted_labels = predicted_labels.data.cpu().numpy()
             mean_outs.append(
-                np.mean(np.argmax(output, axis=1))/output.shape[1])
+                np.mean(np.argmax(predicted_labels, axis=1))/predicted_labels.shape[1])
             if training:
                 loss.backward()
                 optimizer.step()
@@ -181,7 +188,7 @@ def fit(train_loader,
         
         # Generate images and update gif
         new_frame = utils.tile_images(generate_images(
-            model, img_size, n_classes, onehot_fcn, cuda))
+            model, img_size, n_classes, onehot_fn, cuda))
         generated.append(new_frame)
         
         # Update gif with loss plot

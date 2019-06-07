@@ -1,5 +1,6 @@
 import json
 import os
+from typing import Callable
 
 import imageio
 import numpy as np
@@ -12,12 +13,23 @@ import torch
 from torchvision import datasets, transforms
 from torchvision.datasets.mnist import read_label_file, read_image_file
 
+from args import args
+
 def clearline():
     CURSOR_UP_ONE = '\x1b[1A'
     ERASE_LINE = '\x1b[2K'
     print(CURSOR_UP_ONE + ERASE_LINE + CURSOR_UP_ONE)
+
+def input2label(x: torch.Tensor) -> torch.LongTensor:
+    """
+    - Convert a torch array containing floats to contain ints
+    - The continuous values of 'x' are binned based on n_bins set at args.py
+    - This will turn our problem of predicting the next pixel value to 
+     a classification problem (instead of regression)
+    """
+    return torch.squeeze(torch.round((args.n_bins - 1) * x).type(torch.LongTensor), 1)
     
-def tile_images(images: np.array, n_rows=0):
+def tile_images(images: np.array, n_rows=0) -> np.array:
     n_images = len(images)
     height = images[0].shape[1]
     width = images[0].shape[2]
@@ -36,7 +48,7 @@ def tile_images(images: np.array, n_rows=0):
     images = np.concatenate(images, 1)
     return images
 
-def plot_stats(stats, savepath: str):
+def plot_stats(stats, savepath: str) -> None:
     """
     Make all the plots in stats. Stats can be a dict or a path to json (str)
     """
@@ -70,19 +82,19 @@ def plot_stats(stats, savepath: str):
     for key, value in stats.items():
         _plot(value, key)            
         
-def onehot(n_classes):
-    def onehot_fcn(x):
+def onehot(n_classes: int) -> Callable:
+    def onehot_fn(x):
         y = np.zeros((n_classes), dtype='float32')
         y[x] = 1
         return y
-    return onehot_fcn
-
+    return onehot_fn
 
 def augment(rotate=5):
     return transforms.Compose([transforms.RandomRotation(rotate),
                                transforms.ToTensor()])
+
 def data_loader(dataset, batch_size, n_workers=8):
-    assert dataset.lower() in ['mnist','emnist','fashionmnist']
+    assert dataset.lower() in ['mnist', 'fashionmnist']
 
     loader_args = {'batch_size':batch_size,
                    'num_workers':n_workers,
@@ -95,23 +107,17 @@ def data_loader(dataset, batch_size, n_workers=8):
     if dataset.lower()=='mnist':
         dataset_init = datasets.MNIST
         n_classes = 10
-    elif dataset.lower()=='emnist':
-        dataset_init = EMNIST
-        n_classes = 37
-        dataset_args.update({'split':'letters'})
     else:
         dataset_init = datasets.FashionMNIST
         n_classes = 10
-    onehot_fcn = onehot(n_classes)
-    dataset_args.update({'target_transform':onehot_fcn})
+    onehot_fn = onehot(n_classes)
+    dataset_args.update({'target_transform':onehot_fn})
 
     val_loader = torch.utils.data.DataLoader(
         dataset_init(train=False, **dataset_args), shuffle=False, **loader_args)
-
     dataset_args['transform'] = augment()
     train_loader = torch.utils.data.DataLoader(
         dataset_init(train=True, **dataset_args), shuffle=True, **loader_args)
 
-
-    return train_loader, val_loader, onehot_fcn, n_classes
+    return train_loader, val_loader, onehot_fn, n_classes
         
