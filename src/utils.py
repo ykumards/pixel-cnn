@@ -82,12 +82,12 @@ def plot_stats(stats, savepath: str) -> None:
     for key, value in stats.items():
         _plot(value, key)            
         
-def onehot(n_classes: int) -> Callable:
-    def onehot_fn(x):
-        y = np.zeros((n_classes), dtype='float32')
-        y[x] = 1
-        return y
-    return onehot_fn
+def get_label2onehot(n_classes: int) -> Callable:
+    def label2onehot(target_class_index):
+        one_hot_vector = np.zeros((n_classes), dtype='float32')
+        one_hot_vector[target_class_index] = 1
+        return one_hot_vector
+    return label2onehot
 
 def augment(rotate=5):
     return transforms.Compose([transforms.RandomRotation(rotate),
@@ -110,8 +110,8 @@ def data_loader(dataset, batch_size, n_workers=8):
     else:
         dataset_init = datasets.FashionMNIST
         n_classes = 10
-    onehot_fn = onehot(n_classes)
-    dataset_args.update({'target_transform':onehot_fn})
+    label2onehot = get_label2onehot(n_classes)
+    dataset_args.update({'target_transform':label2onehot})
 
     val_loader = torch.utils.data.DataLoader(
         dataset_init(train=False, **dataset_args), shuffle=False, **loader_args)
@@ -119,5 +119,5 @@ def data_loader(dataset, batch_size, n_workers=8):
     train_loader = torch.utils.data.DataLoader(
         dataset_init(train=True, **dataset_args), shuffle=True, **loader_args)
 
-    return train_loader, val_loader, onehot_fn, n_classes
+    return train_loader, val_loader, label2onehot, n_classes
         

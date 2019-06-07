@@ -1,52 +1,56 @@
-import os
-import json
-import time
+import os, json, time
 from typing import Callable
 from pathlib import Path
 from skimage.transform import resize
 from progressbar import ProgressBar
 import numpy as np
-
 import imageio
 from PIL import Image
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-
 import torch
 
 import utils, args
 
-def generate(trained_model, img_size, y, temp=0.8, cuda=False):
+def generate(trained_model: torch.nn.Module, 
+             img_size: list, 
+             y: np.array, 
+             temp=0.8, 
+             cuda=False) -> np.array:
     trained_model.eval()
-    gen = torch.from_numpy(np.zeros([y.shape[0], 1] + img_size, dtype='float32'))
-    y = torch.from_numpy(y)
+    generated_image = np.zeros([y.shape[0], 1] + img_size, dtype='float32')
+    # tip: when from_numpy() is used tensor and np_array share same memory
+    # changes are reflected on each other. so used when converting back to
+    # numpy array 
+    generated_image, y = torch.from_numpy(generated_image), torch.from_numpy(y)
     if cuda:
-        y, gen = y.cuda(), gen.cuda()   
+        y, generated_image = y.cuda(), generated_image.cuda()   
              
     p_bar = ProgressBar()
     print('Generating images...')
     for r in p_bar(range(img_size[0])):
         for c in range(img_size[1]):
-            out = trained_model(gen, y)
+            out = trained_model(generated_image, y)
             p = torch.exp(out)[:, :, r, c]
             p = torch.pow(p, 1/temp)
             p = p/torch.sum(p, -1, keepdim=True)
             sample = p.multinomial(1)
-            gen[:, :, r, c] = sample.float()/(out.shape[1] - 1)
+            generated_image[:, :, r, c] = sample.float()/(out.shape[1] - 1)
             
     utils.clearline()
     utils.clearline()
-    return (255*gen.data.cpu().numpy()).astype('uint8')
+    return (255 * generated_image.data.cpu().numpy()).astype('uint8')
 
 def generate_images(trained_model: torch.nn.Module, 
                     img_size: list, 
                     n_classes: int, 
-                    onehot_fn: Callable, 
-                    cuda: bool=False):
+                    label2onehot: Callable, 
+                    cuda: bool=False) -> np.array:
     "generate images from the trained model. Hard coded to 5 samples per class"
-    y = np.array(list(range(min(n_classes, 10))) * 5) # generate 5 images per class
-    y = np.concatenate([onehot_fn(x)[np.newaxis, :] for x in y])
+    # if n_classes = 3; y = [0,1,2] * 5
+    y = list(range(min(n_classes, 10))) * 5 # generate 5 images per class    
+    y = np.concatenate([label2onehot(np.array(x))[np.newaxis, :] for x in y])
     return generate(trained_model, img_size, y, cuda=cuda)
 
 def generate_between_classes(model: torch.nn.Module, 
@@ -54,7 +58,7 @@ def generate_between_classes(model: torch.nn.Module,
                              classes: int, 
                              saveto: str,
                              n_classes: int, 
-                             cuda:bool =False):
+                             cuda:bool =False) -> None:
     y = np.zeros((1, n_classes), dtype='float32')
     y[:, classes] = 1/len(classes)
     y = np.repeat(y, 10, axis=0)
@@ -85,7 +89,7 @@ def fit(train_loader: torch.utils.data.DataLoader,
         exp_path: str,
         label_preprocess: Callable,
         loss_fn: torch.autograd.Function,
-        onehot_fn: Callable,
+        label2onehot: Callable,
         n_classes:int =10,
         optimizer:str ='adam',
         learning_rate:float =1e-4,
@@ -120,6 +124,7 @@ def fit(train_loader: torch.utils.data.DataLoader,
             loss = loss_fn(predicted_labels, batch_labels)
             # track mean output
             predicted_labels = predicted_labels.data.cpu().numpy()
+            # TODO: why do we need to keep track of mean?
             mean_outs.append(
                 np.mean(np.argmax(predicted_labels, axis=1))/predicted_labels.shape[1])
             if training:
@@ -167,14 +172,14 @@ def fit(train_loader: torch.utils.data.DataLoader,
         plots = list(np.load(exp_path/'generated_plots.npy'))
         print(f'Resuming from epoch {start_epoch}')
     
-    for e in range(start_epoch, max_epochs):
+    for epoch in range(start_epoch, max_epochs):
         # Training
         t0 = time.time()
         loss, mean_out = _run_epoch(train_loader, training=True)
         time_per_example = (time.time() - t0) / len(train_loader.dataset)
         stats['loss']['train'].append(loss)
         stats['mean_output']['train'].append(mean_out)
-        print((f'Epoch {e}:    Training loss = {loss:.4f}    mean output = {mean_out:.2f}    '
+        print((f'Epoch {epoch}:    Training loss = {loss:.4f}    mean output = {mean_out:.2f}    '
                f'{time_per_example*1000:.2f} msec/example'))
         
         # Validation
@@ -188,7 +193,7 @@ def fit(train_loader: torch.utils.data.DataLoader,
         
         # Generate images and update gif
         new_frame = utils.tile_images(generate_images(
-            model, img_size, n_classes, onehot_fn, cuda))
+            model, img_size, n_classes, label2onehot, cuda))
         generated.append(new_frame)
         
         # Update gif with loss plot

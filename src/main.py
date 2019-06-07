@@ -16,7 +16,7 @@ def run(resume=False):
         os.makedirs(exp_dir)
 
     # Data loaders
-    train_loader, val_loader, onehot_fn, n_classes = utils.data_loader(
+    train_loader, val_loader, label2onehot, n_classes = utils.data_loader(
         args.dataset_name, args.batch_size
     )
 
@@ -64,7 +64,7 @@ def run(resume=False):
                 exp_path=exp_dir,
                 label_preprocess=utils.input2label,
                 loss_fn=loss_fn,
-                onehot_fn=onehot_fn,
+                label2onehot=label2onehot,
                 n_classes=10,
                 optimizer=args.optimizer,
                 learning_rate=args.learning_rate,
