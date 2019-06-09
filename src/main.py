@@ -1,3 +1,7 @@
+"""
+adapted from: https://github.com/jrbtaylor/conditional-pixelcnn
+"""
+
 import os
 import json
 from pathlib import Path
