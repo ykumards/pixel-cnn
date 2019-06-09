@@ -3,7 +3,7 @@ from argparse import Namespace
 from pathlib import Path
 
 args = Namespace(
-    exp_name="pixelCNN_trial",
+    exp_name="pixelCNN_v1",
     exp_dir = Path('../experiments/'),
     seed=123,
     disable_cuda=False,
@@ -13,19 +13,19 @@ args = Namespace(
     dataset_name = 'mnist',
 
     ######### Training Params ######################
-    num_epochs=2,
-    es_criteria=9,
+    num_epochs=50,
+    es_criteria=8,
     reduce_lr_criteria=3,
     es_threshold=0.05,
     learning_rate=1e-4,
-    batch_size=8,
+    batch_size=32,
     optimizer='adam',
 
     ######### Model Params #########################
-    n_features=2,
-    n_layers=1,
-    n_bins=4,
-    dropout=0.3,
+    n_features=512,
+    n_layers=6,
+    n_bins=128,
+    dropout=0.7,
 )
 
 if not args.disable_cuda and torch.cuda.is_available():

@@ -1,0 +1,1 @@
+{"batch_size": 32, "n_features": 512, "n_layers": 6, "n_bins": 128, "optimizer": "adam", "learning_rate": 0.0001, "dropout": 0.7, "cuda": true}
