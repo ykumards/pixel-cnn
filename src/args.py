@@ -4,14 +4,13 @@ from pathlib import Path
 
 args = Namespace(
     exp_name="pixelCNN_v1",
-    exp_dir = Path('../experiments/'),
+    exp_dir=Path("../experiments/"),
     seed=123,
     disable_cuda=False,
     cuda=False,
-    debug = False,
-    num_workers = 1,
-    dataset_name = 'mnist',
-
+    debug=False,
+    num_workers=1,
+    dataset_name="mnist",
     ######### Training Params ######################
     num_epochs=50,
     es_criteria=8,
@@ -19,8 +18,7 @@ args = Namespace(
     es_threshold=0.05,
     learning_rate=1e-4,
     batch_size=32,
-    optimizer='adam',
-
+    optimizer="adam",
     ######### Model Params #########################
     n_features=512,
     n_layers=6,
